@@ -1,22 +1,48 @@
+import os
+
 from fastapi import FastAPI, HTTPException, Request
 from sentence_transformers import SentenceTransformer
 import numpy as np
-import pydantic
+from tika import parser
 from pydantic import BaseModel
 app = FastAPI()
 model = SentenceTransformer('sentence-transformers/distiluse-base-multilingual-cased-v2')
+
+def walk_pdf_dir(pathpdfs):
+    list_of_pdfs = {}
+    for (dirpath, dirnames, filenames) in os.walk(pathpdfs):
+        for filename in filenames:
+            if filename.endswith('.pdf'):
+                list_of_pdfs[filename] = os.sep.join([dirpath, filename])
+    pdf_content_dict = read_pdf(list_of_pdfs)
+
+    return pdf_content_dict
+
+
+def read_pdf(listofpfds):
+    pdf_content = {}
+    for key, value in listofpfds.items():
+        raw = parser.from_file(value)
+        pdf_content[key] = raw['content']
+
+    return pdf_content
+
 #Creat a data model
-#Since the client will be passing in some sort of text, we need to use Pydantic data model
 
 class Data(BaseModel):
-    content: str
+    pathtopdf: str
+
+
+
 @app.post("/")
 #returns a list
 def generate_embeddings(pdf: Data):
-        pdf_data =pdf.content
-        embeddings = model.encode(pdf_data)  # Generate embeddings
+        embdedded_pdf = {}
+        pdf_data = walk_pdf_dir(pdf.pathtopdf)
+        for key, value in pdf_data.items():
+            embeddings = model.encode(value)  # Generate embeddings
+            embeddings_list = embeddings.tolist() if isinstance(embeddings, np.ndarray) else embeddings
+            embdedded_pdf[key] = embeddings_list
 
-        # Convert embeddings to a list (if they are in NumPy array format)
-        embeddings_list = embeddings.tolist() if isinstance(embeddings, np.ndarray) else embeddings
 
-        return  embeddings_list
+        return  embdedded_pdf
