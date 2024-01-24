@@ -6,6 +6,7 @@ from tika import parser # pip install tika
 from sentence_transformers import SentenceTransformer
 model = SentenceTransformer('sentence-transformers/distiluse-base-multilingual-cased-v2')
 
+from qdrant_client import models,QdrantClient
 
 def walk_pdf_dir(pathpdfs):
     list_of_pdfs = {}
@@ -27,8 +28,23 @@ def read_pdf(listofpfds):
     return pdf_content
 
 
+def create_vector_database(collection_name,store = None):
 
-def generate(pdf_path):
+    if store == None:
+        storage = QdrantClient(":memory:")
+    else:
+        storage = QdrantClient(path = store)
+
+
+    storage.recreate_collection(
+        collection_name=collection_name,
+        vectors_config=models.VectorParams(
+            size=model.get_sentence_embedding_dimension(),  # Vector size is defined by used model
+            distance=models.Distance.COSINE
+        )
+    )
+
+def generate(pdf_path,db ='no'):
     embdedded_pdf = {}
     pdf_data = walk_pdf_dir(pdf_path)
     for key,value in pdf_data.items():
@@ -36,11 +52,15 @@ def generate(pdf_path):
         embeddings_list = embeddings.tolist() if isinstance(embeddings, np.ndarray) else embeddings
         embdedded_pdf[key] = embeddings_list
 
-    # Convert embeddings to a list (if they are in NumPy array format)
+    if db == 'yes':
+       create_vector_database('pdf')
+       print('Files embedded and stored in a vector database')
+    else:
+
+        print('Files embedded')
 
 
-    print(embdedded_pdf.keys())
+
     return None
 
 
-generate('/Users/kazirahman/PycharmProjects/PDFAPI/testing_data')
